@@ -1,5 +1,9 @@
 import { ModeOfOperation as aes } from 'aes-js'
 import * as base64 from "./base64.js"
+import JSZip from 'jszip'
+import tar from 'tar-stream'
+import { gzip, gunzip } from 'fflate'
+import untar from 'js-untar'
 
 const cSharpHeader = [0, 1, 0, 0, 0, 255, 255, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0, 6, 1, 0, 0, 0]
 const aesKey = StringToBytes('UKu52ePUBwetZ9wNX88o54dnfKRu0T1l')
@@ -142,4 +146,116 @@ export function DownloadData(data, fileName){
     document.body.append(a)
     a.click()
     document.body.removeChild(a)
+}
+
+export async function ProcessBulkFiles(files, convertToPC = true) {
+    const zip = new JSZip()
+    const processed = []
+    
+    for (let file of files) {
+        if (!file.name.endsWith('.dat')) continue
+        
+        try {
+            let data
+            if (convertToPC) {
+                // Switch to PC: read as text, encrypt
+                const text = await file.text()
+                data = Encode(text)
+            } else {
+                // PC to Switch: read as binary, decrypt
+                const arrayBuffer = await file.arrayBuffer()
+                data = Decode(new Uint8Array(arrayBuffer))
+            }
+            
+            // Use the file's full path (including folder structure) if available
+            const filePath = file.webkitRelativePath || file.name
+            zip.file(filePath, data)
+            processed.push(filePath)
+        } catch (err) {
+            console.warn(`Failed to process ${file.name}:`, err)
+        }
+    }
+    
+    return { zip, processed }
+}
+
+export async function DownloadZip(zip, fileName) {
+    const content = await zip.generateAsync({type: "blob"})
+    DownloadData(content, fileName)
+}
+
+export function CreateTarGz(files) {
+    return new Promise((resolve, reject) => {
+        const pack = tar.pack()
+        const chunks = []
+        
+        // Add all files to tar
+        files.forEach(({ filePath, data }) => {
+            if (typeof data === 'string') {
+                pack.entry({ name: filePath }, Buffer.from(data, 'utf8'))
+            } else {
+                pack.entry({ name: filePath }, Buffer.from(data))
+            }
+        })
+        
+        pack.finalize()
+        
+        // Collect tar data
+        pack.on('data', chunk => chunks.push(chunk))
+        pack.on('end', () => {
+            const tarData = new Uint8Array(Buffer.concat(chunks))
+            
+            // Gzip the tar data
+            gzip(tarData, (err, compressed) => {
+                if (err) {
+                    reject(err)
+                } else {
+                    resolve(new Blob([compressed], { type: 'application/gzip' }))
+                }
+            })
+        })
+        pack.on('error', reject)
+    })
+}
+
+export async function DownloadTarGz(files, fileName) {
+    const blob = await CreateTarGz(files)
+    DownloadData(blob, fileName)
+}
+
+export function ExtractTarGz(arrayBuffer) {
+    return new Promise((resolve, reject) => {
+        // First ungzip the data
+        gunzip(new Uint8Array(arrayBuffer), async (err, uncompressed) => {
+            if (err) {
+                reject(err)
+                return
+            }
+            
+            try {
+                // Use js-untar for browser-compatible tar extraction
+                const tarFiles = await untar(uncompressed.buffer)
+                const files = []
+                
+                for (const file of tarFiles) {
+                    if (file.name.endsWith('.dat')) {
+                        files.push({
+                            name: file.name.split('/').pop(),
+                            webkitRelativePath: file.name,
+                            async arrayBuffer() {
+                                return file.buffer
+                            },
+                            async text() {
+                                return new TextDecoder().decode(file.buffer)
+                            }
+                        })
+                    }
+                }
+                
+                resolve(files)
+            } catch (tarErr) {
+                reject(tarErr)
+            }
+        })
+    })
 }
