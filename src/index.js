@@ -250,7 +250,7 @@ class App extends React.Component {
         return <div id="wrapper">
             {this.state.dragging && <div id="cover"></div>}
             <p id="description">This online tool allows you to modify a Hollow Knight save file. You can also use this to convert your PC save to and from a Switch save.</p>
-            <p id="source">You can view the source code in the <a href="https://github.com/bloodorca/hollow">github repo</a>.</p>
+            <p id="source">You can view the source code in the <a href="https://github.com/dogty/hollow">github repo</a>.</p>
 			<ul id="instructions">
                 <li>Make a backup of your original file.</li>
                 <li>Select or drag in the source save file you want to modify.</li>
