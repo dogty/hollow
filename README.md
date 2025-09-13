@@ -1,5 +1,5 @@
 # Hollow 
-## https://bloodorca.github.io/hollow/
+## https://dogty.github.io/hollow/
 Online save file editor. 
 
 The steps behind decryption and encryption were taken from [@KayDeeTee](https://github.com/KayDeeTee)'s [Hollow Knight Save Manager](https://github.com/KayDeeTee/Hollow-Knight-SaveManager). 
